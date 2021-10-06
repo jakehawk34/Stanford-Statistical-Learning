@@ -1,0 +1,339 @@
+---
+title: "Chapter 8 Problems"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+
+Question 7
+=======================
+In the lab, we applied random forests to the Boston data using mtry =
+6 and using ntree = 25 and ntree = 500. Create a plot displaying the
+test error resulting from random forests on this data set for a more
+comprehensive range of values for mtry and ntree. You can model
+your plot after Figure 8.10. Describe the results obtained
+
+```{r}
+library(randomForest)
+library(MASS)
+test.err = double(13)
+dim(Boston)
+train = sample(1:nrow(Boston), 300)
+attach(Boston)
+set.seed(10)
+x.train = Boston[train, -14]
+x.test = Boston[-train, -14]
+y.train = Boston[train, "medv"]
+y.test = Boston[-train, "medv"]
+
+rf.boston1 = randomForest(x.train, y = y.train, xtest = x.test, ytest = y.test, mtry = dim(Boston)[2] - 1, ntree = 500)
+rf.boston2 = randomForest(x.train, y = y.train, xtest = x.test, ytest = y.test, mtry = (dim(Boston)[2] - 1)/2, ntree = 500)
+rf.boston3 = randomForest(x.train, y = y.train, xtest = x.test, ytest = y.test, mtry = sqrt(dim(Boston)[2] - 1), ntree = 500)
+plot(1:500, rf.boston1$mse, ylim = c(10,19), xlab = "# of Trees", ylab = "Test MSE", main = "Boston Random Forests", type = "l", col = "red")
+lines(1:500, rf.boston2$mse, col = "blue")
+lines(1:500, rf.boston3$mse, col = "green")
+legend("topright", c("m = p", "m = p/2", "m = sqrt(p)"), col = c("red", "blue", "green"), cex = 1, lty = 1)
+```
+
+Question 8
+=============================
+In the lab, a classification tree was applied to the Carseats data set after converting Sales into a qualitative response variable. Now we will
+seek to predict Sales using regression trees and related approaches,
+treating the response as a quantitative variable.
+
+(a) Split the data set into a training set and a test set.
+
+```{r}
+detach(Boston)
+library(ISLR)
+library(tree)
+set.seed(14)
+dim(Carseats)
+train = sample(1:nrow(Carseats), 250)
+test = Carseats[-train,]
+colnames(Carseats)
+x.train = Carseats[train, -1]
+x.test = Carseats[-train, -1]
+y.train = Carseats[train, 1]
+y.test = Carseats[-train, 1]
+```
+
+(b) Fit a regression tree to the training set. Plot the tree, and interpret the results. What test MSE do you obtain?
+
+```{r}
+tree.carseats = tree(Sales ~ ., data = Carseats, subset = train)
+summary(tree.carseats)
+plot(tree.carseats);text(tree.carseats, pretty = 0)
+names(tree.carseats)
+tree.carseats
+pred = predict(tree.carseats, newdata = Carseats[-train,])
+mean((pred - y.test)^2)
+```
+
+(c) Use cross-validation in order to determine the optimal level of
+tree complexity. Does pruning the tree improve the test MSE?
+```{r}
+set.seed(4)
+cv.carseats = cv.tree(tree.carseats)
+cv.carseats
+plot(cv.carseats, type = "b")
+prune.carseats = prune.tree(tree.carseats, best = 11)
+plot(prune.carseats); text(prune.carseats, pretty = 0)
+tree.pred = predict(prune.carseats, newdata = Carseats[-train,])
+mean((tree.pred - y.test)^2)
+```
+
+Pruning the tree down to 11 terminal nodes increases the Test MSE slightly from 4.1555 to 4.2076.
+
+(d) Use the bagging approach in order to analyze this data. What
+test MSE do you obtain? Use the importance() function to determine which variables are most important.
+
+```{r}
+library(randomForest)
+set.seed(1)
+bag.carseats = randomForest(Sales ~ ., data = Carseats[train,], mtry = 10, importance = TRUE)
+bag.carseats
+pred = predict(bag.carseats, newdata = Carseats[-train,])
+plot(pred, y.test)
+abline(0, 1)
+mean((pred - y.test)^2)
+importance(bag.carseats)
+varImpPlot(bag.carseats)
+```
+
+Price and ShelveLoc are the two most important variables in predicting the Sales of the Carseats data.
+
+(e) Use random forests to analyze this data. What test MSE do you
+obtain? Use the importance() function to determine which variables are most important. Describe the effect of m, the number of variables considered at each split, on the error rate obtained.
+
+```{r}
+test.err = rep(NA, 10)
+
+for (mtry in 1:10){
+  fit = randomForest(Sales ~ ., data = Carseats[train,], mtry = mtry, importance = TRUE)
+  pred = predict(fit, newdata = Carseats[-train,])
+  test.err[mtry] = mean((pred - y.test)^2)
+}
+
+plot(1:10, test.err, type = "b", xlab = "Number of Variables", ylab = "Test MSE", main = "Random Forests for Different Split Amounts")
+points(9, test.err[9], col = "red", cex = 1, pch = 19)
+```
+
+The number of variables considered at each split was indirectly correlated with the test error rate obtained. Using 9 variables at each split provide the smallest test error amount.
+
+Question 9
+===========================
+This problem involves the OJ data set which is part of the ISLR2
+package.
+
+(a) Create a training set containing a random sample of 800 observations, and a test set containing the remaining observations
+
+```{r}
+library(ISLR2)
+dim(OJ)
+train = sample(1:nrow(OJ), 800)
+OJ.train = OJ[train,]
+OJ.test = OJ[-train,]
+```
+
+(b) Fit a tree to the training data, with Purchase as the response and the other variables as predictors. Use the summary() function to produce summary statistics about the tree, and describe the results obtained. What is the training error rate? How many terminal nodes does the tree have?
+
+```{r}
+oj.tree = tree(Purchase ~ ., data = OJ.train)
+summary(oj.tree)
+```
+
+The tree has 8 terminal nodes. The training error rate is is 0.1488.
+
+(c) Type in the name of the tree object in order to get a detailed text output. Pick one of the terminal nodes, and interpret the information displayed.
+
+```{r}
+oj.tree
+```
+
+The first split involves LoyalCH. The second level of split involves LoyalCH. SalePriceMM, ListPriceDiff, and PctDiscMM are all involved in this tree.
+
+(d) Create a plot of the tree, and interpret the results.
+
+```{r}
+plot(oj.tree); text(oj.tree, pretty = 0)
+```
+
+LoyalCH was the most important variable in predicting whether a customer purchased Minute Maid (MM) or Citrus Hill (CH) orange juice. 
+
+(e) Predict the response on the test data, and produce a confusion matrix comparing the test labels to the predicted test labels. What is the test error rate?
+
+```{r}
+pred = predict(oj.tree, newdata = OJ.test, type = "class")
+table(pred, OJ.test$Purchase)
+(39 + 19) / 270
+```
+
+The test error rate is 0.2148 or 21.48%.
+
+(f) Apply the cv.tree() function to the training set in order to determine the optimal tree size.
+
+```{r}
+cv.oj = cv.tree(oj.tree)
+```
+
+(g) Produce a plot with tree size on the x-axis and cross-validated classification error rate on the y-axis.
+
+```{r}
+plot(cv.oj$size, cv.oj$dev)
+```
+
+(h) Which tree size corresponds to the lowest cross-validated classification error rate?
+
+```{r}
+min(cv.oj$dev)
+cv.oj$size[which.min(cv.oj$dev)]
+```
+
+(i) Produce a pruned tree corresponding to the optimal tree size obtained using cross-validation. If cross-validation does not lead to selection of a pruned tree, then create a pruned tree with five terminal nodes.
+
+```{r}
+prune.oj = prune.misclass(oj.tree, best = 6)
+plot(prune.oj); text(prune.oj, pretty = 0)
+```
+
+The optimal tree size is 6 terminal nodes.
+
+(j) Compare the training error rates between the pruned and unpruned trees. Which is higher?
+
+```{r}
+summary(prune.oj)
+```
+
+The pruned tree has a training error rate of 0.1488, which is the same as the unpruned tree's training error rate.
+
+(k) Compare the test error rates between the pruned and unpruned
+trees. Which is higher?
+
+```{r}
+pred.prune = predict(prune.oj, OJ.test, type = "class")
+table(pred.prune, OJ.test$Purchase)
+(39 + 19) / 270
+```
+
+The pruned tree has a test error rate of 0.2148, which is the same as the unpruned tree's test error rate.
+
+Question 10
+====================
+
+We now use boosting to predict Salary in the Hitters data set.
+
+(a) Remove the observations for whom the salary information is unknown, and then log-transform the salaries.
+
+```{r}
+library(ISLR)
+attach(Hitters)
+names(Hitters)
+summary(Hitters)
+Hitters = na.omit(Hitters)
+Hitters$Salary = log(Salary)
+summary(Hitters)
+```
+
+(b) Create a training set consisting of the first 200 observations, and a test set consisting of the remaining observations.
+
+```{r}
+train = sample(1:nrow(Hitters), 200)
+test = Hitters[-train,]
+train = Hitters[train,]
+```
+
+(c) Perform boosting on the training set with 1,000 trees for a range of values of the shrinkage parameter λ. Produce a plot with different shrinkage values on the x-axis and the corresponding training set MSE on the y-axis.
+
+```{r}
+library(gbm)
+set.seed(12)
+train.mse = rep(NA, 10)
+lambdas = seq(from=0.001, to=0.1, by=0.001)
+for (i in 1:100){
+  boost = gbm(Salary ~ ., data = train, distribution = "gaussian", n.trees = 1000,
+              shrinkage = lambdas[i])
+  pred = predict(boost, n.trees = 1000)
+  train.mse[i] = mean((pred - train$Salary)^2)
+}
+
+plot(lambdas, train.mse, xlab = "Shrinkage Value", ylab = "Training MSE", main = "Boosting Models for Training Salary")
+```
+
+(d) Produce a plot with different shrinkage values on the x-axis and the corresponding test set MSE on the y-axis.
+
+```{r}
+test.mse = rep(NA, 10)
+lambdas = seq(from=0.001, to=0.1, by=0.001)
+for (i in 1:100){
+  boost = gbm(Salary ~ ., data = train, distribution = "gaussian", n.trees = 1000,
+              shrinkage = lambdas[i])
+  pred = predict(boost, newdata = test, n.trees = 1000)
+  test.mse[i] = mean((pred - test$Salary)^2)
+}
+
+plot(lambdas, test.mse, xlab = "Shrinkage Value", ylab = "Test MSE", main = "Boosting Models for Test Salary")
+min(test.mse)
+lambdas[which.min(test.mse)]
+```
+
+(e) Compare the test MSE of boosting to the test MSE that results from applying two of the regression approaches seen in Chapters 3 and 6.
+
+```{r}
+library(glmnet)
+reg.hitters = lm(Salary ~ ., data = train)
+pred.reg = predict(reg.hitters, newdata = test)
+reg.mse = mean((pred.reg - test$Salary)^2)
+
+x = model.matrix(Salary ~ ., data = train)
+x.test = model.matrix(Salary ~ ., data = test)
+y = train$Salary
+fit.ridge = glmnet(x, y, alpha = 0)
+pred.ridge = predict(fit.ridge, s = 0.01, newx = x.test)
+ridge.mse = mean((pred.ridge - test$Salary)^2)
+c("Boosting", "Linear Regression", "Ridge Regression")
+c(min(test.mse), reg.mse, ridge.mse)
+```
+
+The test MSE for boosting is lower than the MSE for Linear Regression and Ridge Regression.
+
+(f) Which variables appear to be the most important predictors in
+the boosted model?
+
+```{r}
+boost.hitters = gbm(Salary ~ ., data = train, distribution = "gaussian", n.trees = 1000, shrinkage = 0.014)
+summary(boost.hitters)
+```
+
+CRuns, CAtBat, and CHits appear to the most important predictors for Salary.
+
+(g) Now apply bagging to the training set. What is the test set MSE for this approach?
+```{r}
+library(randomForest)
+set.seed(4)
+oob.err = double(19)
+test.err = double(19)
+for(mtry in 1:19){
+  fit = randomForest(Salary ~ ., data = train, mtry = mtry, ntree = 400)
+  oob.err[mtry] = fit$mse[400]
+  pred = predict(fit, newdata = test)
+  test.err[mtry] = mean((pred - test$Salary)^2)
+  cat(mtry, " ")
+}
+matplot(1:mtry, cbind(test.err, oob.err), pch=19, col=c("red", "blue"), type="b", ylab="Mean Squared Error")
+legend("topright", legend=c("Test", "OOB"), pch=19, col=c("red", "blue"))
+min(test.err)
+which.min(test.err)
+c("Boosting Test MSE: ", min(test.mse), "Random Forest Test MSE: ", min(test.err))
+```
+
+The minimum test set error comes from a random forest that uses 3 splitting variables at each node. The RF test error is slightly lower than the test MSE for boosting.
+
+
